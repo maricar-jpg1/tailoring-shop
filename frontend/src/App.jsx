@@ -194,49 +194,60 @@ export default function App() {
     }));
   }
 
-  async function saveCustomer(event) {
-    event.preventDefault();
+ async function saveCustomer(event) {
+  event.preventDefault();
 
-    if (saving) return;
+  if (saving) return;
 
-    setSaving(true);
-    setError("");
-    setSuccess("");
+  setSaving(true);
+  setError("");
+  setSuccess("");
 
-    try {
-      const payload = {
-        name: customerForm.name.trim(),
-        phone: customerForm.phone.trim(),
-        email: customerForm.email.trim(),
-        address: customerForm.address.trim(),
-      };
+  try {
+    const payload = {
+      name: customerForm.name.trim(),
+      phone: customerForm.phone.trim(),
+      email: customerForm.email.trim(),
+      address: customerForm.address.trim(),
+    };
 
-      if (!payload.name) {
-        throw new Error("Please enter the customer's name.");
-      }
-
-      if (editingCustomerId !== null) {
-        await api.put(
-          `/customers/${editingCustomerId}`,
-          payload
-        );
-
-        showSuccess("Customer updated successfully.");
-      } else {
-        await api.post("/customers", payload);
-        showSuccess("Customer added successfully.");
-      }
-
-      resetCustomerForm();
-      await loadData();
-    } catch (err) {
-      setError(
-        getErrorMessage(err, "Unable to save customer.")
-      );
-    } finally {
-      setSaving(false);
+    if (!payload.name) {
+      throw new Error("Please enter the customer's full name.");
     }
+
+    if (
+      payload.email &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)
+    ) {
+      throw new Error("Please enter a valid email address.");
+    }
+
+    if (editingCustomerId !== null) {
+      await api.put(
+        `/customers/${editingCustomerId}`,
+        payload
+      );
+
+      showSuccess("Customer updated successfully.");
+    } else {
+      await api.post("/customers", payload);
+
+      showSuccess("Customer added successfully.");
+    }
+
+    resetCustomerForm();
+    await loadData();
+  } catch (err) {
+    setError(
+      getErrorMessage(
+        err,
+        "Unable to save customer. Please check the customer details."
+      )
+    );
+  } finally {
+    setSaving(false);
   }
+}
 
   function editCustomer(customer) {
     setCustomerForm({
