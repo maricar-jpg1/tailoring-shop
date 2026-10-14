@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import "./App.css";
@@ -110,17 +109,24 @@ export default function App() {
     setError("");
 
     try {
-      const [customerResponse, measurementResponse, orderResponse] =
-        await Promise.all([
-          api.get("/customers"),
-          api.get("/measurements"),
-          api.get("/orders"),
-        ]);
+      const [
+        customerResponse,
+        measurementResponse,
+        orderResponse,
+      ] = await Promise.all([
+        api.get("/customers"),
+        api.get("/measurements"),
+        api.get("/orders"),
+      ]);
 
-      setCustomers(getList(customerResponse.data, "customers"));
+      setCustomers(
+        getList(customerResponse.data, "customers")
+      );
+
       setMeasurements(
         getList(measurementResponse.data, "measurements")
       );
+
       setOrders(getList(orderResponse.data, "orders"));
     } catch (err) {
       setError(
@@ -163,6 +169,7 @@ export default function App() {
 
   function updateCustomerField(event) {
     const { name, value } = event.target;
+
     setCustomerForm((previous) => ({
       ...previous,
       [name]: value,
@@ -171,6 +178,7 @@ export default function App() {
 
   function updateMeasurementField(event) {
     const { name, value } = event.target;
+
     setMeasurementForm((previous) => ({
       ...previous,
       [name]: value,
@@ -179,6 +187,7 @@ export default function App() {
 
   function updateOrderField(event) {
     const { name, value } = event.target;
+
     setOrderForm((previous) => ({
       ...previous,
       [name]: value,
@@ -187,26 +196,43 @@ export default function App() {
 
   async function saveCustomer(event) {
     event.preventDefault();
+
+    if (saving) return;
+
     setSaving(true);
     setError("");
     setSuccess("");
 
     try {
+      const payload = {
+        name: customerForm.name.trim(),
+        phone: customerForm.phone.trim(),
+        email: customerForm.email.trim(),
+        address: customerForm.address.trim(),
+      };
+
+      if (!payload.name) {
+        throw new Error("Please enter the customer's name.");
+      }
+
       if (editingCustomerId !== null) {
         await api.put(
           `/customers/${editingCustomerId}`,
-          customerForm
+          payload
         );
+
         showSuccess("Customer updated successfully.");
       } else {
-        await api.post("/customers", customerForm);
+        await api.post("/customers", payload);
         showSuccess("Customer added successfully.");
       }
 
       resetCustomerForm();
       await loadData();
     } catch (err) {
-      setError(getErrorMessage(err, "Unable to save customer."));
+      setError(
+        getErrorMessage(err, "Unable to save customer.")
+      );
     } finally {
       setSaving(false);
     }
@@ -219,6 +245,7 @@ export default function App() {
       email: customer.email || "",
       address: customer.address || "",
     });
+
     setEditingCustomerId(customer.id);
     setPage("customers");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -228,6 +255,7 @@ export default function App() {
     const confirmed = window.confirm(
       `Delete customer "${customer.name}"?`
     );
+
     if (!confirmed) return;
 
     setError("");
@@ -235,6 +263,7 @@ export default function App() {
 
     try {
       await api.delete(`/customers/${customer.id}`);
+
       showSuccess("Customer deleted successfully.");
       await loadData();
     } catch (err) {
@@ -249,6 +278,9 @@ export default function App() {
 
   async function saveMeasurement(event) {
     event.preventDefault();
+
+    if (saving) return;
+
     setSaving(true);
     setError("");
     setSuccess("");
@@ -265,11 +297,33 @@ export default function App() {
         notes: measurementForm.notes.trim(),
       };
 
+      if (!payload.customer_id) {
+        throw new Error("Please select a customer.");
+      }
+
+      for (const field of measurementFields) {
+        const value = payload[field];
+
+        if (
+          value !== null &&
+          (!Number.isFinite(Number(value)) || Number(value) < 0)
+        ) {
+          throw new Error(
+            `${formatLabel(field)} must be zero or greater.`
+          );
+        }
+
+        if (value !== null) {
+          payload[field] = Number(value);
+        }
+      }
+
       if (editingMeasurementId !== null) {
         await api.put(
           `/measurements/${editingMeasurementId}`,
           payload
         );
+
         showSuccess("Measurement updated successfully.");
       } else {
         await api.post("/measurements", payload);
@@ -298,6 +352,7 @@ export default function App() {
       length: measurement.length ?? "",
       notes: measurement.notes || "",
     });
+
     setEditingMeasurementId(measurement.id);
     setPage("measurements");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -307,6 +362,7 @@ export default function App() {
     const confirmed = window.confirm(
       "Delete this measurement record?"
     );
+
     if (!confirmed) return;
 
     setError("");
@@ -314,6 +370,7 @@ export default function App() {
 
     try {
       await api.delete(`/measurements/${measurement.id}`);
+
       showSuccess("Measurement deleted successfully.");
       await loadData();
     } catch (err) {
@@ -323,8 +380,12 @@ export default function App() {
     }
   }
 
+  // REVISED ORDER-SAVING FUNCTION
   async function saveOrder(event) {
     event.preventDefault();
+
+    if (saving) return;
+
     setSaving(true);
     setError("");
     setSuccess("");
@@ -336,25 +397,79 @@ export default function App() {
         garment_type: orderForm.garment_type.trim(),
         description: orderForm.description.trim(),
         quantity: Number(orderForm.quantity),
-        order_date: orderForm.order_date,
+        order_date: orderForm.order_date || null,
         due_date: orderForm.due_date || null,
-        status: orderForm.status,
+        status: orderForm.status || "Pending",
         total_price: Number(orderForm.total_price),
         notes: orderForm.notes.trim(),
       };
 
+      if (!payload.customer_id) {
+        throw new Error("Please select a customer.");
+      }
+
+      if (!payload.garment_type) {
+        throw new Error("Please enter the garment type.");
+      }
+
+      if (
+        !Number.isInteger(payload.quantity) ||
+        payload.quantity < 1
+      ) {
+        throw new Error(
+          "Quantity must be a positive whole number."
+        );
+      }
+
+      if (
+        !Number.isFinite(payload.total_price) ||
+        payload.total_price < 0
+      ) {
+        throw new Error(
+          "Please enter a valid total price."
+        );
+      }
+
+      if (!payload.order_date) {
+        throw new Error("Please select an order date.");
+      }
+
+      if (
+        payload.due_date &&
+        payload.due_date < payload.order_date
+      ) {
+        throw new Error(
+          "The due date cannot be earlier than the order date."
+        );
+      }
+
       if (editingOrderId !== null) {
-        await api.put(`/orders/${editingOrderId}`, payload);
+        await api.put(
+          `/orders/${editingOrderId}`,
+          payload
+        );
+
         showSuccess("Order updated successfully.");
       } else {
-        await api.post("/orders", payload);
-        showSuccess("Order added successfully.");
+        const response = await api.post("/orders", payload);
+        const generatedCode = response.data?.order_code;
+
+        showSuccess(
+          generatedCode
+            ? `Order added successfully. Order Code: ${generatedCode}`
+            : "Order added successfully."
+        );
       }
 
       resetOrderForm();
       await loadData();
     } catch (err) {
-      setError(getErrorMessage(err, "Unable to save order."));
+      setError(
+        getErrorMessage(
+          err,
+          "Unable to save order. Check your input and backend connection."
+        )
+      );
     } finally {
       setSaving(false);
     }
@@ -387,6 +502,7 @@ export default function App() {
     const confirmed = window.confirm(
       `Delete order "${order.order_code || order.id}"?`
     );
+
     if (!confirmed) return;
 
     setError("");
@@ -394,10 +510,13 @@ export default function App() {
 
     try {
       await api.delete(`/orders/${order.id}`);
+
       showSuccess("Order deleted successfully.");
       await loadData();
     } catch (err) {
-      setError(getErrorMessage(err, "Unable to delete order."));
+      setError(
+        getErrorMessage(err, "Unable to delete order.")
+      );
     }
   }
 
@@ -405,11 +524,14 @@ export default function App() {
     const customer = customers.find(
       (item) => Number(item.id) === Number(customerId)
     );
+
     return customer?.name || "Unknown Customer";
   }
 
   function customerOptionLabel(customer) {
-    return `${customer.name}${customer.phone ? ` — ${customer.phone}` : ""}`;
+    return `${customer.name}${
+      customer.phone ? ` — ${customer.phone}` : ""
+    }`;
   }
 
   return (
@@ -428,7 +550,9 @@ export default function App() {
         <nav className="sidebar-nav">
           <button
             type="button"
-            className={`nav-item ${page === "customers" ? "active" : ""}`}
+            className={`nav-item ${
+              page === "customers" ? "active" : ""
+            }`}
             onClick={() => {
               setPage("customers");
               setError("");
@@ -440,7 +564,9 @@ export default function App() {
 
           <button
             type="button"
-            className={`nav-item ${page === "measurements" ? "active" : ""}`}
+            className={`nav-item ${
+              page === "measurements" ? "active" : ""
+            }`}
             onClick={() => {
               setPage("measurements");
               setError("");
@@ -452,7 +578,9 @@ export default function App() {
 
           <button
             type="button"
-            className={`nav-item ${page === "orders" ? "active" : ""}`}
+            className={`nav-item ${
+              page === "orders" ? "active" : ""
+            }`}
             onClick={() => {
               setPage("orders");
               setError("");
@@ -472,15 +600,21 @@ export default function App() {
       <main className="main-content">
         <header className="page-header">
           <div>
-            <p className="eyebrow">TAILORING MANAGEMENT SYSTEM</p>
+            <p className="eyebrow">
+              TAILORING MANAGEMENT SYSTEM
+            </p>
+
             <h2>
               {page === "customers"
                 ? "Customers"
                 : page === "measurements"
-                  ? "Measurements"
-                  : "Orders"}
+                ? "Measurements"
+                : "Orders"}
             </h2>
-            <p>Manage your tailoring shop records in one place.</p>
+
+            <p>
+              Manage your tailoring shop records in one place.
+            </p>
           </div>
 
           <button
@@ -531,13 +665,17 @@ export default function App() {
                     ? "Edit Customer"
                     : "Add Customer"}
                 </h3>
-                <p>Enter the customer's contact information.</p>
+                <p>
+                  Enter the customer's contact information.
+                </p>
               </div>
 
               <form onSubmit={saveCustomer}>
                 <div className="form-grid">
                   <div className="form-group">
-                    <label htmlFor="customer-name">Full Name *</label>
+                    <label htmlFor="customer-name">
+                      Full Name *
+                    </label>
                     <input
                       id="customer-name"
                       name="name"
@@ -549,7 +687,9 @@ export default function App() {
                   </div>
 
                   <div className="form-group">
-                    <label htmlFor="customer-phone">Phone Number</label>
+                    <label htmlFor="customer-phone">
+                      Phone Number
+                    </label>
                     <input
                       id="customer-phone"
                       name="phone"
@@ -560,7 +700,9 @@ export default function App() {
                   </div>
 
                   <div className="form-group">
-                    <label htmlFor="customer-email">Email Address</label>
+                    <label htmlFor="customer-email">
+                      Email Address
+                    </label>
                     <input
                       id="customer-email"
                       name="email"
@@ -572,7 +714,9 @@ export default function App() {
                   </div>
 
                   <div className="form-group">
-                    <label htmlFor="customer-address">Address</label>
+                    <label htmlFor="customer-address">
+                      Address
+                    </label>
                     <input
                       id="customer-address"
                       name="address"
@@ -584,12 +728,15 @@ export default function App() {
                 </div>
 
                 <div className="form-actions">
-                  <button className="btn btn-primary" disabled={saving}>
+                  <button
+                    className="btn btn-primary"
+                    disabled={saving}
+                  >
                     {saving
                       ? "Saving..."
                       : editingCustomerId !== null
-                        ? "Update Customer"
-                        : "+ Add Customer"}
+                      ? "Update Customer"
+                      : "+ Add Customer"}
                   </button>
 
                   {editingCustomerId !== null && (
@@ -609,8 +756,11 @@ export default function App() {
               <div className="list-heading">
                 <div>
                   <h3>Customer List</h3>
-                  <p>{customers.length} customer record(s)</p>
+                  <p>
+                    {customers.length} customer record(s)
+                  </p>
                 </div>
+
                 <button
                   type="button"
                   className="btn btn-secondary"
@@ -632,11 +782,13 @@ export default function App() {
                       <th>Actions</th>
                     </tr>
                   </thead>
+
                   <tbody>
                     {customers.length === 0 ? (
                       <tr>
                         <td colSpan="5" className="empty-state">
-                          No customers found. Add your first customer above.
+                          No customers found. Add your first
+                          customer above.
                         </td>
                       </tr>
                     ) : (
@@ -651,14 +803,19 @@ export default function App() {
                               <button
                                 type="button"
                                 className="btn btn-edit"
-                                onClick={() => editCustomer(customer)}
+                                onClick={() =>
+                                  editCustomer(customer)
+                                }
                               >
                                 Edit
                               </button>
+
                               <button
                                 type="button"
                                 className="btn btn-delete"
-                                onClick={() => deleteCustomer(customer)}
+                                onClick={() =>
+                                  deleteCustomer(customer)
+                                }
                               >
                                 Delete
                               </button>
@@ -683,12 +840,15 @@ export default function App() {
                     ? "Edit Measurement"
                     : "Add Measurement"}
                 </h3>
-                <p>Record the customer's body measurements.</p>
+                <p>
+                  Record the customer's body measurements.
+                </p>
               </div>
 
               {customers.length === 0 ? (
                 <p className="empty-state">
-                  Add a customer first before recording measurements.
+                  Add a customer first before recording
+                  measurements.
                 </p>
               ) : (
                 <form onSubmit={saveMeasurement}>
@@ -697,6 +857,7 @@ export default function App() {
                       <label htmlFor="measurement-customer">
                         Customer *
                       </label>
+
                       <select
                         id="measurement-customer"
                         name="customer_id"
@@ -704,9 +865,15 @@ export default function App() {
                         onChange={updateMeasurementField}
                         required
                       >
-                        <option value="">Select a customer</option>
+                        <option value="">
+                          Select a customer
+                        </option>
+
                         {customers.map((customer) => (
-                          <option key={customer.id} value={customer.id}>
+                          <option
+                            key={customer.id}
+                            value={customer.id}
+                          >
                             {customerOptionLabel(customer)}
                           </option>
                         ))}
@@ -718,6 +885,7 @@ export default function App() {
                         <label htmlFor={`measurement-${field}`}>
                           {formatLabel(field)} (cm)
                         </label>
+
                         <input
                           id={`measurement-${field}`}
                           name={field}
@@ -732,7 +900,10 @@ export default function App() {
                     ))}
 
                     <div className="form-group form-group-full">
-                      <label htmlFor="measurement-notes">Notes</label>
+                      <label htmlFor="measurement-notes">
+                        Notes
+                      </label>
+
                       <textarea
                         id="measurement-notes"
                         name="notes"
@@ -745,12 +916,15 @@ export default function App() {
                   </div>
 
                   <div className="form-actions">
-                    <button className="btn btn-primary" disabled={saving}>
+                    <button
+                      className="btn btn-primary"
+                      disabled={saving}
+                    >
                       {saving
                         ? "Saving..."
                         : editingMeasurementId !== null
-                          ? "Update Measurement"
-                          : "+ Add Measurement"}
+                        ? "Update Measurement"
+                        : "+ Add Measurement"}
                     </button>
 
                     {editingMeasurementId !== null && (
@@ -771,8 +945,11 @@ export default function App() {
               <div className="list-heading">
                 <div>
                   <h3>Measurement List</h3>
-                  <p>{measurements.length} measurement record(s)</p>
+                  <p>
+                    {measurements.length} measurement record(s)
+                  </p>
                 </div>
+
                 <button
                   type="button"
                   className="btn btn-secondary"
@@ -789,12 +966,15 @@ export default function App() {
                     <tr>
                       <th>Customer</th>
                       {measurementFields.map((field) => (
-                        <th key={field}>{formatLabel(field)} (cm)</th>
+                        <th key={field}>
+                          {formatLabel(field)} (cm)
+                        </th>
                       ))}
                       <th>Notes</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
+
                   <tbody>
                     {measurements.length === 0 ? (
                       <tr>
@@ -810,23 +990,31 @@ export default function App() {
                         <tr key={measurement.id}>
                           <td>
                             {measurement.customer_name ||
-                              customerName(measurement.customer_id)}
+                              customerName(
+                                measurement.customer_id
+                              )}
                           </td>
+
                           {measurementFields.map((field) => (
                             <td key={field}>
                               {measurement[field] ?? "—"}
                             </td>
                           ))}
+
                           <td>{measurement.notes || "—"}</td>
+
                           <td>
                             <div className="table-actions">
                               <button
                                 type="button"
                                 className="btn btn-edit"
-                                onClick={() => editMeasurement(measurement)}
+                                onClick={() =>
+                                  editMeasurement(measurement)
+                                }
                               >
                                 Edit
                               </button>
+
                               <button
                                 type="button"
                                 className="btn btn-delete"
@@ -853,9 +1041,14 @@ export default function App() {
             <section className="panel">
               <div className="panel-heading">
                 <h3>
-                  {editingOrderId !== null ? "Edit Order" : "Add Order"}
+                  {editingOrderId !== null
+                    ? "Edit Order"
+                    : "Add Order"}
                 </h3>
-                <p>Enter the details of the customer's tailoring order.</p>
+                <p>
+                  Enter the details of the customer's tailoring
+                  order.
+                </p>
               </div>
 
               {customers.length === 0 ? (
@@ -866,18 +1059,24 @@ export default function App() {
                 <form onSubmit={saveOrder}>
                   <div className="form-grid">
                     <div className="form-group">
-                      <label htmlFor="order-code">Order Code</label>
+                      <label htmlFor="order-code">
+                        Order Code
+                      </label>
+
                       <input
                         id="order-code"
                         name="order_code"
                         value={orderForm.order_code}
                         onChange={updateOrderField}
-                        placeholder="ORD-2026-001"
+                        placeholder="Leave blank to generate automatically"
                       />
                     </div>
 
                     <div className="form-group">
-                      <label htmlFor="order-customer">Customer *</label>
+                      <label htmlFor="order-customer">
+                        Customer *
+                      </label>
+
                       <select
                         id="order-customer"
                         name="customer_id"
@@ -885,9 +1084,15 @@ export default function App() {
                         onChange={updateOrderField}
                         required
                       >
-                        <option value="">Select a customer</option>
+                        <option value="">
+                          Select a customer
+                        </option>
+
                         {customers.map((customer) => (
-                          <option key={customer.id} value={customer.id}>
+                          <option
+                            key={customer.id}
+                            value={customer.id}
+                          >
                             {customerOptionLabel(customer)}
                           </option>
                         ))}
@@ -895,7 +1100,10 @@ export default function App() {
                     </div>
 
                     <div className="form-group">
-                      <label htmlFor="order-garment">Garment Type *</label>
+                      <label htmlFor="order-garment">
+                        Garment Type *
+                      </label>
+
                       <input
                         id="order-garment"
                         name="garment_type"
@@ -907,7 +1115,10 @@ export default function App() {
                     </div>
 
                     <div className="form-group">
-                      <label htmlFor="order-quantity">Quantity *</label>
+                      <label htmlFor="order-quantity">
+                        Quantity *
+                      </label>
+
                       <input
                         id="order-quantity"
                         name="quantity"
@@ -921,7 +1132,10 @@ export default function App() {
                     </div>
 
                     <div className="form-group">
-                      <label htmlFor="order-date">Order Date *</label>
+                      <label htmlFor="order-date">
+                        Order Date *
+                      </label>
+
                       <input
                         id="order-date"
                         name="order_date"
@@ -933,7 +1147,10 @@ export default function App() {
                     </div>
 
                     <div className="form-group">
-                      <label htmlFor="order-due-date">Due Date</label>
+                      <label htmlFor="order-due-date">
+                        Due Date
+                      </label>
+
                       <input
                         id="order-due-date"
                         name="due_date"
@@ -944,7 +1161,10 @@ export default function App() {
                     </div>
 
                     <div className="form-group">
-                      <label htmlFor="order-status">Status *</label>
+                      <label htmlFor="order-status">
+                        Status *
+                      </label>
+
                       <select
                         id="order-status"
                         name="status"
@@ -953,14 +1173,19 @@ export default function App() {
                         required
                       >
                         <option value="Pending">Pending</option>
-                        <option value="In Progress">In Progress</option>
+                        <option value="In Progress">
+                          In Progress
+                        </option>
                         <option value="Completed">Completed</option>
                         <option value="Cancelled">Cancelled</option>
                       </select>
                     </div>
 
                     <div className="form-group">
-                      <label htmlFor="order-price">Total Price (PHP) *</label>
+                      <label htmlFor="order-price">
+                        Total Price (PHP) *
+                      </label>
+
                       <input
                         id="order-price"
                         name="total_price"
@@ -975,7 +1200,10 @@ export default function App() {
                     </div>
 
                     <div className="form-group form-group-full">
-                      <label htmlFor="order-description">Description</label>
+                      <label htmlFor="order-description">
+                        Description
+                      </label>
+
                       <textarea
                         id="order-description"
                         name="description"
@@ -988,6 +1216,7 @@ export default function App() {
 
                     <div className="form-group form-group-full">
                       <label htmlFor="order-notes">Notes</label>
+
                       <textarea
                         id="order-notes"
                         name="notes"
@@ -1000,12 +1229,15 @@ export default function App() {
                   </div>
 
                   <div className="form-actions">
-                    <button className="btn btn-primary" disabled={saving}>
+                    <button
+                      className="btn btn-primary"
+                      disabled={saving}
+                    >
                       {saving
                         ? "Saving..."
                         : editingOrderId !== null
-                          ? "Update Order"
-                          : "+ Add Order"}
+                        ? "Update Order"
+                        : "+ Add Order"}
                     </button>
 
                     {editingOrderId !== null && (
@@ -1028,6 +1260,7 @@ export default function App() {
                   <h3>Order List</h3>
                   <p>{orders.length} order record(s)</p>
                 </div>
+
                 <button
                   type="button"
                   className="btn btn-secondary"
@@ -1053,39 +1286,53 @@ export default function App() {
                       <th>Actions</th>
                     </tr>
                   </thead>
+
                   <tbody>
                     {orders.length === 0 ? (
                       <tr>
                         <td colSpan="9" className="empty-state">
-                          No orders found. Add your first order above.
+                          No orders found. Add your first order
+                          above.
                         </td>
                       </tr>
                     ) : (
                       orders.map((order) => (
                         <tr key={order.id}>
-                          <td>{order.order_code || `ORD-${order.id}`}</td>
+                          <td>
+                            {order.order_code ||
+                              `ORD-${order.id}`}
+                          </td>
+
                           <td>
                             {order.customer_name ||
                               customerName(order.customer_id)}
                           </td>
+
                           <td>{order.garment_type}</td>
                           <td>{order.quantity}</td>
+
                           <td>
                             {order.order_date
                               ? String(order.order_date).slice(0, 10)
                               : "—"}
                           </td>
+
                           <td>
                             {order.due_date
                               ? String(order.due_date).slice(0, 10)
                               : "—"}
                           </td>
+
                           <td>
                             <span className="order-status">
                               {order.status}
                             </span>
                           </td>
-                          <td>{formatCurrency(order.total_price)}</td>
+
+                          <td>
+                            {formatCurrency(order.total_price)}
+                          </td>
+
                           <td>
                             <div className="table-actions">
                               <button
@@ -1095,6 +1342,7 @@ export default function App() {
                               >
                                 Edit
                               </button>
+
                               <button
                                 type="button"
                                 className="btn btn-delete"
