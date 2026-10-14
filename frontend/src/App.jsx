@@ -287,87 +287,90 @@ export default function App() {
     }
   }
 
-  async function saveMeasurement(event) {
-    event.preventDefault();
+  
+async function saveMeasurement(event) {
+  event.preventDefault();
 
-    if (saving) return;
+  if (saving) return;
 
-    setSaving(true);
-    setError("");
-    setSuccess("");
+  setSaving(true);
+  setError("");
+  setSuccess("");
 
-    try {
-      const payload = {
-        customer_id: Number(measurementForm.customer_id),
-        chest: measurementForm.chest || null,
-        waist: measurementForm.waist || null,
-        hips: measurementForm.hips || null,
-        shoulder: measurementForm.shoulder || null,
-        sleeve: measurementForm.sleeve || null,
-        length: measurementForm.length || null,
-        notes: measurementForm.notes.trim(),
-      };
+  try {
+    const payload = {
+      customer_id: Number(measurementForm.customer_id),
+      chest: measurementForm.chest || null,
+      waist: measurementForm.waist || null,
+      hips: measurementForm.hips || null,
+      shoulder: measurementForm.shoulder || null,
+      sleeve: measurementForm.sleeve || null,
+      length: measurementForm.length || null,
+      notes: measurementForm.notes.trim(),
+    };
 
-      if (!payload.customer_id) {
-        throw new Error("Please select a customer.");
-      }
-
-      for (const field of measurementFields) {
-        const value = payload[field];
-
-        if (
-          value !== null &&
-          (!Number.isFinite(Number(value)) || Number(value) < 0)
-        ) {
-          throw new Error(
-            `${formatLabel(field)} must be zero or greater.`
-          );
-        }
-
-        if (value !== null) {
-          payload[field] = Number(value);
-        }
-      }
-
-      if (editingMeasurementId !== null) {
-        await api.put(
-          `/measurements/${editingMeasurementId}`,
-          payload
-        );
-
-        showSuccess("Measurement updated successfully.");
-      } else {
-        await api.post("/measurements", payload);
-        showSuccess("Measurement added successfully.");
-      }
-
-      resetMeasurementForm();
-      await loadData();
-    } catch (err) {
-      setError(
-        getErrorMessage(err, "Unable to save measurement.")
-      );
-    } finally {
-      setSaving(false);
+    if (!payload.customer_id) {
+      throw new Error("Please select a customer.");
     }
-  }
 
-  function editMeasurement(measurement) {
-    setMeasurementForm({
-      customer_id: String(measurement.customer_id || ""),
-      chest: measurement.chest ?? "",
-      waist: measurement.waist ?? "",
-      hips: measurement.hips ?? "",
-      shoulder: measurement.shoulder ?? "",
-      sleeve: measurement.sleeve ?? "",
-      length: measurement.length ?? "",
-      notes: measurement.notes || "",
+    const hasMeasurement = measurementFields.some((field) => {
+      const value = payload[field];
+      return value !== null && value !== "";
     });
 
-    setEditingMeasurementId(measurement.id);
-    setPage("measurements");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (!hasMeasurement) {
+      throw new Error(
+        "Please enter at least one body measurement."
+      );
+    }
+
+  
+    for (const field of measurementFields) {
+      const value = payload[field];
+
+      if (value === null || value === "") {
+        payload[field] = null;
+        continue;
+      }
+
+      const numericValue = Number(value);
+
+      if (!Number.isFinite(numericValue) || numericValue < 0) {
+        throw new Error(
+          `${formatLabel(field)} must be a valid number zero or greater.`
+        );
+      }
+
+      payload[field] = numericValue;
+    }
+
+    if (editingMeasurementId !== null) {
+      await api.put(
+        `/measurements/${editingMeasurementId}`,
+        payload
+      );
+
+      showSuccess("Measurement updated successfully.");
+    } else {
+      await api.post("/measurements", payload);
+
+      showSuccess("Measurement added successfully.");
+    }
+
+    // Reset the form and refresh the records
+    resetMeasurementForm();
+    await loadData();
+  } catch (err) {
+    setError(
+      getErrorMessage(
+        err,
+        "Unable to save measurement. Please check the measurement details."
+      )
+    );
+  } finally {
+    setSaving(false);
   }
+}
 
   async function deleteMeasurement(measurement) {
     const confirmed = window.confirm(
