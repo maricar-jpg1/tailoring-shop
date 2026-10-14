@@ -186,32 +186,59 @@ export default function App() {
   }
 
   async function saveCustomer(event) {
-    event.preventDefault();
-    setSaving(true);
-    setError("");
-    setSuccess("");
+  event.preventDefault();
 
-    try {
-      if (editingCustomerId !== null) {
-        await api.put(
-          `/customers/${editingCustomerId}`,
-          customerForm
-        );
-        showSuccess("Customer updated successfully.");
-      } else {
-        await api.post("/customers", customerForm);
-        showSuccess("Customer added successfully.");
-      }
+  if (saving) return;
 
-      resetCustomerForm();
-      await loadData();
-    } catch (err) {
-      setError(getErrorMessage(err, "Unable to save customer."));
-    } finally {
-      setSaving(false);
+  setSaving(true);
+  setError("");
+  setSuccess("");
+
+  try {
+    const payload = {
+      name: customerForm.name.trim(),
+      phone: customerForm.phone.trim(),
+      email: customerForm.email.trim(),
+      address: customerForm.address.trim(),
+    };
+
+    if (!payload.name) {
+      throw new Error("Please enter the customer's full name.");
     }
-  }
 
+    if (
+      payload.email &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)
+    ) {
+      throw new Error("Please enter a valid email address.");
+    }
+
+    if (editingCustomerId !== null) {
+      await api.put(
+        `/customers/${editingCustomerId}`,
+        payload
+      );
+
+      showSuccess("Customer updated successfully.");
+    } else {
+      await api.post("/customers", payload);
+
+      showSuccess("Customer added successfully.");
+    }
+
+    resetCustomerForm();
+    await loadData();
+  } catch (err) {
+    setError(
+      getErrorMessage(
+        err,
+        "Unable to save customer. Please check the customer details."
+      )
+    );
+  } finally {
+    setSaving(false);
+  }
+}
   function editCustomer(customer) {
     setCustomerForm({
       name: customer.name || "",
