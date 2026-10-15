@@ -211,9 +211,24 @@ export default function App() {
       address: customerForm.address.trim(),
     };
 
-    if (!payload.name) {
-      throw new Error("Please enter the customer's full name.");
-    }
+    if (payload.email) {
+  const duplicateEmail = customers.some((customer) => {
+    const sameEmail =
+      customer.email?.trim().toLowerCase() ===
+      payload.email.toLowerCase();
+
+    const isDifferentCustomer =
+      Number(customer.id) !== Number(editingCustomerId);
+
+    return sameEmail && isDifferentCustomer;
+  });
+
+  if (duplicateEmail) {
+    throw new Error(
+      "This email address is already registered to another customer."
+    );
+  }
+}
 
     if (
       payload.email &&
